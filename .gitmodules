@@ -1,0 +1,3 @@
+[submodule "subprojects/osmium-html"]
+	path = subprojects/osmium-html
+	url = git@github.com:/antpiasecki/osmium-html
