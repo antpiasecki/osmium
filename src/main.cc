@@ -4,6 +4,19 @@
 #include <memory>
 #include <osmium-html/parser.hh>
 
+// stolen from stackoverflow. i love c++
+inline std::string trim(const std::string &in) {
+  std::string s = in;
+  s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+            return std::isspace(ch) == 0;
+          }));
+  s.erase(std::find_if(s.rbegin(), s.rend(),
+                       [](unsigned char ch) { return std::isspace(ch) == 0; })
+              .base(),
+          s.end());
+  return s;
+}
+
 class OsmiumWindow : public Gtk::Window {
 public:
   OsmiumWindow() {
@@ -22,7 +35,7 @@ public:
     ss << file.rdbuf();
     m_dom = parse(ss.str());
 
-    render(m_dom);
+    render(m_dom, nullptr);
 
     present();
   }
@@ -30,23 +43,46 @@ public:
 private:
   std::shared_ptr<Node> m_dom;
   Gtk::Box m_page_layout;
+  std::vector<Gtk::Widget *> m_page_widgets;
 
-  void render(const std::shared_ptr<Node> &node) {
+  void render(const std::shared_ptr<Node> &node,
+              const std::shared_ptr<Element> &parent) {
     if (node->is_element()) {
-      render_element(std::static_pointer_cast<Element>(node));
+      render_element(std::static_pointer_cast<Element>(node), parent);
     } else {
-      render_textnode(std::static_pointer_cast<TextNode>(node));
+      render_textnode(std::static_pointer_cast<TextNode>(node), parent);
     }
   }
 
-  void render_element(const std::shared_ptr<Element> &el) {
+  void render_element(const std::shared_ptr<Element> &el,
+                      const std::shared_ptr<Element> & /*parent*/) {
     for (const auto &child : el->children()) {
-      render(child);
+      render(child, el);
     }
   }
 
-  void render_textnode(const std::shared_ptr<TextNode> &textnode) {
-    std::cout << "rendering " << textnode->content() << std::endl;
+  void render_textnode(const std::shared_ptr<TextNode> &textnode,
+                       const std::shared_ptr<Element> &parent) {
+    // don't display scripts and styles
+    if (parent != nullptr &&
+        (parent->name() == "script" || parent->name() == "style")) {
+      return;
+    }
+
+    auto content = trim(textnode->content());
+    if (content.empty()) {
+      return;
+    }
+
+    auto *label = Gtk::make_managed<Gtk::Label>(content);
+    label->set_wrap(true);
+    label->set_xalign(0.0);
+    append_widget(label);
+  }
+
+  void append_widget(Gtk::Widget *widget) {
+    m_page_layout.append(*widget);
+    m_page_widgets.push_back(widget);
   }
 };
 
