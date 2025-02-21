@@ -1,3 +1,4 @@
+#include "style.hh"
 #include <cassert>
 #include <fstream>
 #include <gtkmm.h>
@@ -5,8 +6,7 @@
 #include <osmium-html/parser.hh>
 
 // stolen from stackoverflow. i love c++
-inline std::string trim(const std::string &in) {
-  std::string s = in;
+inline void trim(std::string &s) {
   s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
             return std::isspace(ch) == 0;
           }));
@@ -14,7 +14,6 @@ inline std::string trim(const std::string &in) {
                        [](unsigned char ch) { return std::isspace(ch) == 0; })
               .base(),
           s.end());
-  return s;
 }
 
 class OsmiumWindow : public Gtk::Window {
@@ -23,11 +22,19 @@ public:
     set_title("Osmium");
     set_default_size(800, 600);
 
+    auto css_provider = Gtk::CssProvider::create();
+    css_provider->load_from_data(GLOBAL_STYLE.data());
+    Gtk::StyleContext::add_provider_for_display(
+        Gdk::Display::get_default(), css_provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+    set_child(m_page_scrolled_window);
+
     m_page_layout.set_orientation(Gtk::Orientation::VERTICAL);
     m_page_layout.set_halign(Gtk::Align::START);
     m_page_layout.set_expand(true);
     m_page_layout.set_margin(10);
-    set_child(m_page_layout);
+    m_page_scrolled_window.set_child(m_page_layout);
 
     std::ifstream file("test.html");
     assert(file.good());
@@ -43,6 +50,7 @@ public:
 private:
   std::shared_ptr<Node> m_dom;
   Gtk::Box m_page_layout;
+  Gtk::ScrolledWindow m_page_scrolled_window;
   std::vector<Gtk::Widget *> m_page_widgets;
 
   void render(const std::shared_ptr<Node> &node,
@@ -69,7 +77,8 @@ private:
       return;
     }
 
-    auto content = trim(textnode->content());
+    auto content = textnode->content();
+    trim(content);
     if (content.empty()) {
       return;
     }
@@ -77,6 +86,14 @@ private:
     auto *label = Gtk::make_managed<Gtk::Label>(content);
     label->set_wrap(true);
     label->set_xalign(0.0);
+
+    if (parent != nullptr && parent->is_heading()) {
+      label->get_style_context()->add_class(parent->name());
+    }
+    if (parent != nullptr && parent->name() == "p") {
+      label->get_style_context()->add_class("p");
+    }
+
     append_widget(label);
   }
 
@@ -87,6 +104,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+  setenv("GTK_THEME", "Adwaita:light", 1);
+
   auto app = Gtk::Application::create("org.antpiasecki.osmium");
   return app->make_window_and_run<OsmiumWindow>(argc, argv);
 }
