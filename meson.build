@@ -12,6 +12,7 @@ libosmium_html_dep = subproject('osmium-html').get_variable('libosmium_html_dep'
 executable(
   'osmium',
   'src/main.cc',
+  'src/window.cc',
   install: true,
   dependencies: [gtkmm_dep, httplib_dep, libosmium_html_dep],
   cpp_args: ['-Wall', '-Wextra', '-Wpedantic', '-Wconversion'],
