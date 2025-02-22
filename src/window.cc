@@ -71,6 +71,11 @@ void OsmiumWindow::navigate(const std::string &url) {
     assert(false);
   }
 
+  if (resp->status == 302 || resp->status == 307 || resp->status == 308) {
+    navigate(resp->get_header_value("Location"));
+    return;
+  }
+
   assert(resp->status == 200);
   m_dom = parse(resp->body);
 
