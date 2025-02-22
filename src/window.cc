@@ -57,15 +57,22 @@ void OsmiumWindow::navigate(const std::string &url) {
   // TODO: fix this horrible regex
   std::smatch match;
   assert(std::regex_match(m_current_url, match,
-                          std::regex(R"(https?:\/\/([^\/]+)(\/.*)?)")));
+                          std::regex(R"((https?):\/\/([^\/]+)(\/.*)?)")));
 
   // TODO: dont use httplib
-  httplib::Client http(match[1].str());
-  auto resp = http.Get(match[2].str());
-  assert(resp->status == 200);
-  std::string body = resp->body;
+  httplib::Result resp;
+  if (match[1].str() == "https") {
+    httplib::SSLClient http(match[2].str());
+    resp = http.Get(match[3].str());
+  } else if (match[1].str() == "http") {
+    httplib::Client http(match[2].str());
+    resp = http.Get(match[3].str());
+  } else {
+    assert(false);
+  }
 
-  m_dom = parse(body);
+  assert(resp->status == 200);
+  m_dom = parse(resp->body);
 
   render(m_dom, nullptr);
 }

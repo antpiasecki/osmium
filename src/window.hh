@@ -1,6 +1,7 @@
 #pragma once
 
 #include <gtkmm.h>
+#define CPPHTTPLIB_OPENSSL_SUPPORT
 #include <httplib.h>
 #include <osmium-html/parser.hh>
 
