@@ -9,8 +9,9 @@ public:
   OsmiumWindow();
 
 private:
-  std::shared_ptr<Node> m_dom;
+  NodePtr m_dom;
   std::string m_current_url;
+  std::string m_page_title;
 
   Gtk::Box m_main_layout;
   Gtk::Box m_navbar_layout;
@@ -22,8 +23,7 @@ private:
 
   void navigate(const std::string &url);
 
-  void render(const std::shared_ptr<Node> &node,
-              const std::shared_ptr<Element> &parent) {
+  void render(const NodePtr &node, const ElementPtr &parent) {
     if (node->is_element()) {
       render_element(std::static_pointer_cast<Element>(node), parent);
     } else {
@@ -31,11 +31,9 @@ private:
     }
   }
 
-  void render_element(const std::shared_ptr<Element> &el,
-                      const std::shared_ptr<Element> & /*parent*/);
+  void render_element(const ElementPtr &el, const ElementPtr &parent);
 
-  void render_textnode(const std::shared_ptr<TextNode> &textnode,
-                       const std::shared_ptr<Element> &parent);
+  void render_textnode(const TextNodePtr &textnode, const ElementPtr &parent);
 
   void append_widget(Gtk::Widget *widget) {
     m_page_layout.append(*widget);

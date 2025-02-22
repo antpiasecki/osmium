@@ -26,6 +26,8 @@ OsmiumWindow::OsmiumWindow() {
   set_child(m_main_layout);
 
   m_url_entry.set_hexpand(true);
+  m_url_entry.signal_activate().connect(
+      [this]() { navigate(m_url_entry.get_text()); });
   m_navbar_layout.append(m_url_entry);
 
   m_go_button.signal_clicked().connect(
@@ -68,24 +70,30 @@ void OsmiumWindow::navigate(const std::string &url) {
   render(m_dom, nullptr);
 }
 
-void OsmiumWindow::render_element(const std::shared_ptr<Element> &el,
-                                  const std::shared_ptr<Element> & /*parent*/) {
+void OsmiumWindow::render_element(const ElementPtr &el,
+                                  const ElementPtr & /*parent*/) {
   for (const auto &child : el->children()) {
     render(child, el);
   }
 }
 
-void OsmiumWindow::render_textnode(const std::shared_ptr<TextNode> &textnode,
-                                   const std::shared_ptr<Element> &parent) {
+void OsmiumWindow::render_textnode(const TextNodePtr &textnode,
+                                   const ElementPtr &parent) {
   if (parent != nullptr &&
       (parent->name() == "script" || parent->name() == "style" ||
-       parent->name() == "title")) {
+       parent->name() == "head")) {
     return;
   }
 
   auto content = textnode->content();
   trim(content);
   if (content.empty()) {
+    return;
+  }
+
+  if (parent->name() == "title") {
+    m_page_title = content;
+    set_title(m_page_title + " - Osmium");
     return;
   }
 
