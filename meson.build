@@ -6,13 +6,13 @@ project(
 )
 
 gtkmm_dep = dependency('gtkmm-4.0')
-
+httplib_dep = subproject('httplib').get_variable('cpp_httplib_dep')
 libosmium_html_dep = subproject('osmium-html').get_variable('libosmium_html_dep')
 
 executable(
   'osmium',
   'src/main.cc',
   install: true,
-  dependencies: [gtkmm_dep, libosmium_html_dep],
+  dependencies: [gtkmm_dep, httplib_dep, libosmium_html_dep],
   cpp_args: ['-Wall', '-Wextra', '-Wpedantic', '-Wconversion'],
 )

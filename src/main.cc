@@ -1,9 +1,10 @@
 #include "style.hh"
 #include <cassert>
-#include <fstream>
 #include <gtkmm.h>
+#include <httplib.h>
 #include <memory>
 #include <osmium-html/parser.hh>
+#include <string>
 
 // stolen from stackoverflow. i love c++
 inline void trim(std::string &s) {
@@ -36,13 +37,7 @@ public:
     m_page_layout.set_margin(10);
     m_page_scrolled_window.set_child(m_page_layout);
 
-    std::ifstream file("test.html");
-    assert(file.good());
-    std::stringstream ss;
-    ss << file.rdbuf();
-    m_dom = parse(ss.str());
-
-    render(m_dom, nullptr);
+    navigate("http://example.org/");
 
     present();
   }
@@ -51,7 +46,26 @@ private:
   std::shared_ptr<Node> m_dom;
   Gtk::Box m_page_layout;
   Gtk::ScrolledWindow m_page_scrolled_window;
+  std::string m_current_url;
   std::vector<Gtk::Widget *> m_page_widgets;
+
+  void navigate(const std::string &url) {
+    m_current_url = url;
+    clear_page();
+
+    std::smatch match;
+    assert(std::regex_match(m_current_url, match,
+                            std::regex(R"(https?:\/\/([^\/]+)(\/.*)?)")));
+
+    httplib::Client http(match[1].str());
+    auto resp = http.Get(match[2].str());
+
+    assert(resp->status == 200);
+
+    m_dom = parse(resp->body);
+
+    render(m_dom, nullptr);
+  }
 
   void render(const std::shared_ptr<Node> &node,
               const std::shared_ptr<Element> &parent) {
@@ -71,9 +85,9 @@ private:
 
   void render_textnode(const std::shared_ptr<TextNode> &textnode,
                        const std::shared_ptr<Element> &parent) {
-    // don't display scripts and styles
     if (parent != nullptr &&
-        (parent->name() == "script" || parent->name() == "style")) {
+        (parent->name() == "script" || parent->name() == "style" ||
+         parent->name() == "title")) {
       return;
     }
 
@@ -100,6 +114,13 @@ private:
   void append_widget(Gtk::Widget *widget) {
     m_page_layout.append(*widget);
     m_page_widgets.push_back(widget);
+  }
+
+  void clear_page() {
+    for (const auto &widget : m_page_widgets) {
+      m_page_layout.remove(*widget);
+    }
+    m_page_widgets.clear();
   }
 };
 

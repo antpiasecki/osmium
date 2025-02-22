@@ -1,2 +1,5 @@
 /.vscode
 /.cache
+/subprojects/*
+!/subprojects/*.wrap
+!/subprojects/osmium-html
