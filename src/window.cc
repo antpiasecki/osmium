@@ -14,7 +14,7 @@ static void trim(std::string &s) {
 
 OsmiumWindow::OsmiumWindow() {
   set_title("Osmium");
-  set_default_size(800, 600);
+  set_default_size(1024, 768);
 
   auto css_provider = Gtk::CssProvider::create();
   css_provider->load_from_data(GLOBAL_STYLE.data());
@@ -54,32 +54,53 @@ void OsmiumWindow::navigate(const std::string &url) {
   m_url_entry.set_text(m_current_url);
   clear_page();
 
+  log("Navigating to " + url + "...");
+
   // TODO: fix this horrible regex
   std::smatch match;
-  assert(std::regex_match(m_current_url, match,
-                          std::regex(R"((https?):\/\/([^\/]+)(\/.*)?)")));
+  if (!std::regex_match(m_current_url, match,
+                        std::regex(R"((https?):\/\/([^\/]+)(\/.*)?)"))) {
+    log("Failed to parse URL: " + m_current_url + ".");
+    return;
+  }
 
   // TODO: dont use httplib
   httplib::Result resp;
   if (match[1].str() == "https") {
-    httplib::SSLClient http(match[2].str());
-    resp = http.Get(match[3].str());
+    httplib::SSLClient client(match[2].str());
+    resp = client.Get(match[3].str());
   } else if (match[1].str() == "http") {
-    httplib::Client http(match[2].str());
-    resp = http.Get(match[3].str());
+    httplib::Client client(match[2].str());
+    resp = client.Get(match[3].str());
   } else {
-    assert(false);
+    log("Unsupported protocol: " + match[1].str() + ".");
+    return;
   }
 
-  if (resp->status == 302 || resp->status == 307 || resp->status == 308) {
+  if (!resp) {
+    log("Request failed with error: " + std::to_string(resp->status) + ".");
+    return;
+  }
+
+  if (resp->status == 301 || resp->status == 302 || resp->status == 307 ||
+      resp->status == 308) {
     navigate(resp->get_header_value("Location"));
     return;
   }
 
-  assert(resp->status == 200);
+  if (resp->status != 200) {
+    log("Request failed with status code " + std::to_string(resp->status) +
+        ".");
+    return;
+  }
+
+  log("Parsing " + url + "...");
   m_dom = parse(resp->body);
 
+  log("Rendering " + url + "...");
   render(m_dom, nullptr);
+
+  log("Done!");
 }
 
 void OsmiumWindow::render_element(const ElementPtr &el,
@@ -138,3 +159,5 @@ void OsmiumWindow::render_textnode(const TextNodePtr &textnode,
 
   append_widget(label);
 }
+
+void OsmiumWindow::log(const std::string &s) { std::cout << s << std::endl; }

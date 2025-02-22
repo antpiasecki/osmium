@@ -46,4 +46,6 @@ private:
     }
     m_page_widgets.clear();
   }
+
+  static void log(const std::string &s);
 };
