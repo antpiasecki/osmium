@@ -91,9 +91,25 @@ void OsmiumWindow::render_textnode(const TextNodePtr &textnode,
     return;
   }
 
-  if (parent->name() == "title") {
+  if (parent != nullptr && parent->name() == "title") {
     m_page_title = content;
     set_title(m_page_title + " - Osmium");
+    return;
+  }
+
+  if (parent != nullptr && parent->name() == "a") {
+    auto *label = Gtk::make_managed<Gtk::LinkButton>();
+    label->set_label(content);
+
+    auto href = parent->attributes()["href"];
+    label->signal_activate_link().connect(
+        [this, href]() {
+          navigate(href);
+          return true;
+        },
+        false);
+
+    append_widget(label);
     return;
   }
 

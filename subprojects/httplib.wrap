@@ -1,4 +1,3 @@
 [wrap-git]
 url = https://github.com/yhirose/cpp-httplib
 revision = HEAD
-depth = 1
