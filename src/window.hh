@@ -21,7 +21,7 @@ private:
   Gtk::ScrolledWindow m_page_scrolled_window;
   std::vector<Gtk::Widget *> m_page_widgets;
 
-  void navigate(const std::string &url);
+  void navigate(std::string url);
 
   void render(const NodePtr &node, const ElementPtr &parent) {
     if (node->is_element()) {

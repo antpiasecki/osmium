@@ -1,5 +1,6 @@
 #include "window.hh"
 #include "style.hh"
+#include <ada.h>
 
 // stolen from stackoverflow. i love c++
 static void trim(std::string &s) {
@@ -17,7 +18,7 @@ OsmiumWindow::OsmiumWindow() {
   set_default_size(1024, 768);
 
   auto css_provider = Gtk::CssProvider::create();
-  css_provider->load_from_data(GLOBAL_STYLE.data());
+  css_provider->load_from_data(std::string(GLOBAL_STYLE));
   Gtk::StyleContext::add_provider_for_display(
       Gdk::Display::get_default(), css_provider,
       GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
@@ -49,36 +50,53 @@ OsmiumWindow::OsmiumWindow() {
   present();
 }
 
-void OsmiumWindow::navigate(const std::string &url) {
+// TODO: the arg probably shouldnt be named url
+void OsmiumWindow::navigate(std::string url) {
+  auto start_time = duration_cast<std::chrono::milliseconds>(
+      std::chrono::system_clock::now().time_since_epoch());
+
+  // handle absolute paths (/home, /static/style.css)
+  if (url.starts_with('/')) {
+    auto parsed_current_url = ada::parse(m_current_url);
+    if (!parsed_current_url) {
+      log("Failed to parse URL: " + url + ".");
+      return;
+    }
+
+    parsed_current_url->set_pathname(url);
+
+    url = parsed_current_url->get_href();
+  }
+  // TODO: handle relative paths
+
+  auto parsed_url = ada::parse(url);
+  if (!parsed_url) {
+    log("Failed to parse URL: " + url + ".");
+    return;
+  }
+
   m_current_url = url;
-  m_url_entry.set_text(m_current_url);
+  m_url_entry.set_text(url);
   clear_page();
 
   log("Navigating to " + url + "...");
 
-  // TODO: fix this horrible regex
-  std::smatch match;
-  if (!std::regex_match(m_current_url, match,
-                        std::regex(R"((https?):\/\/([^\/]+)(\/.*)?)"))) {
-    log("Failed to parse URL: " + m_current_url + ".");
-    return;
-  }
-
   // TODO: dont use httplib
   httplib::Result resp;
-  if (match[1].str() == "https") {
-    httplib::SSLClient client(match[2].str());
-    resp = client.Get(match[3].str());
-  } else if (match[1].str() == "http") {
-    httplib::Client client(match[2].str());
-    resp = client.Get(match[3].str());
+  if (parsed_url->get_protocol() == "https:") {
+    httplib::SSLClient client(std::string(parsed_url->get_host()));
+    resp = client.Get(std::string(parsed_url->get_pathname()));
+  } else if (parsed_url->get_protocol() == "http:") {
+    httplib::Client client(std::string(parsed_url->get_host()));
+    resp = client.Get(std::string(parsed_url->get_pathname()));
   } else {
-    log("Unsupported protocol: " + match[1].str() + ".");
+    log("Unsupported protocol: " + std::string(parsed_url->get_protocol()) +
+        ".");
     return;
   }
 
   if (!resp) {
-    log("Request failed with error: " + std::to_string(resp->status) + ".");
+    log("Request failed with error: " + httplib::to_string(resp.error()) + ".");
     return;
   }
 
@@ -94,13 +112,17 @@ void OsmiumWindow::navigate(const std::string &url) {
     return;
   }
 
-  log("Parsing " + url + "...");
+  log("Parsing " + std::to_string(resp->body.length() / 1024) + " KBs...");
   m_dom = parse(resp->body);
 
-  log("Rendering " + url + "...");
+  log("Rendering...");
   render(m_dom, nullptr);
 
-  log("Done!");
+  auto end_time = duration_cast<std::chrono::milliseconds>(
+      std::chrono::system_clock::now().time_since_epoch());
+
+  log("Rendered " + std::to_string(m_page_widgets.size()) + " widgets.");
+  log("Done in " + std::to_string((end_time - start_time).count()) + " ms.");
 }
 
 void OsmiumWindow::render_element(const ElementPtr &el,
