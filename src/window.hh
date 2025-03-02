@@ -9,6 +9,10 @@ public:
   OsmiumWindow();
 
 private:
+  // TODO
+  static constexpr const char *s_user_agent =
+      "Mozilla/5.0 (Linux x86_64) osmium-html/0.1 Osmium/0.1";
+
   NodePtr m_dom;
   std::string m_current_url;
   std::string m_page_title;

@@ -83,12 +83,14 @@ void OsmiumWindow::navigate(std::string url) {
 
   // TODO: dont use httplib
   httplib::Result resp;
+  httplib::Headers headers = {{"User-Agent", std::string(s_user_agent)}};
+
   if (parsed_url->get_protocol() == "https:") {
     httplib::SSLClient client(std::string(parsed_url->get_host()));
-    resp = client.Get(std::string(parsed_url->get_pathname()));
+    resp = client.Get(std::string(parsed_url->get_pathname()), headers);
   } else if (parsed_url->get_protocol() == "http:") {
     httplib::Client client(std::string(parsed_url->get_host()));
-    resp = client.Get(std::string(parsed_url->get_pathname()));
+    resp = client.Get(std::string(parsed_url->get_pathname()), headers);
   } else {
     log("Unsupported protocol: " + std::string(parsed_url->get_protocol()) +
         ".");
