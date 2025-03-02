@@ -7,16 +7,15 @@ project(
 
 cmake = import('cmake')
 
-gtkmm_dep = dependency('gtkmm-4.0')
+qt_dep = dependency('qt6', modules: ['Core', 'Gui', 'Widgets'])
 httplib_dep = subproject('httplib').get_variable('cpp_httplib_dep')
-ada_dep = cmake.subproject('ada').get_variable('ada_dep')
 libosmium_html_dep = subproject('osmium-html').get_variable('libosmium_html_dep')
 
 executable(
   'osmium',
   'src/main.cc',
-  'src/window.cc',
+  'src/mainwindow.cc',
   install: true,
-  dependencies: [gtkmm_dep, httplib_dep, ada_dep, libosmium_html_dep],
-  cpp_args: ['-Wall', '-Wextra', '-Wpedantic', '-Wconversion'],
+  dependencies: [qt_dep, httplib_dep, libosmium_html_dep],
+  cpp_args: ['-Wall', '-Wextra', '-Wpedantic'],
 )

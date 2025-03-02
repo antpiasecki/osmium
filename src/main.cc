@@ -1,9 +1,12 @@
-#include "window.hh"
-#include <gtkmm.h>
+#include "mainwindow.hh"
+#include <QApplication>
 
 int main(int argc, char *argv[]) {
   setenv("GTK_THEME", "Adwaita:light", 1);
 
-  auto app = Gtk::Application::create("org.antpiasecki.osmium");
-  return app->make_window_and_run<OsmiumWindow>(argc, argv);
+  QApplication app(argc, argv);
+  MainWindow window;
+  window.resize(1024, 768);
+  window.show();
+  return QApplication::exec();
 }
