@@ -49,7 +49,7 @@ void MainWindow::navigate(QString url) {
   if (url.startsWith('/')) {
     QUrl parsed_current_url(m_current_url);
     if (!parsed_current_url.isValid()) {
-      log("Failed to parse URL: " + url + ".");
+      log("Failed to parse URL: " + url);
       return;
     }
 
@@ -61,15 +61,16 @@ void MainWindow::navigate(QString url) {
 
   QUrl parsed_url(url);
   if (!parsed_url.isValid()) {
-    log("Failed to parse URL: " + url + ".");
+    log("Failed to parse URL: " + url);
     return;
   }
 
   m_current_url = url;
   m_url_bar->setText(m_current_url);
+
+  // clear the previous page
   clear_page();
   m_page_layout->update();
-  // TODO
   QCoreApplication::processEvents();
 
   log("Navigating to " + url + "...");
@@ -91,13 +92,13 @@ void MainWindow::navigate(QString url) {
     httplib::Client client(host);
     resp = client.Get(path, headers);
   } else {
-    log("Unsupported schema: " + parsed_url.scheme() + ".");
+    log("Unsupported schema: " + parsed_url.scheme());
     return;
   }
 
   if (!resp) {
     log("Request failed with error: " +
-        QString::fromStdString(httplib::to_string(resp.error())) + ".");
+        QString::fromStdString(httplib::to_string(resp.error())));
     return;
   }
 
@@ -108,8 +109,7 @@ void MainWindow::navigate(QString url) {
   }
 
   if (resp->status != 200) {
-    log("Request failed with status code " + QString::number(resp->status) +
-        ".");
+    log("Request failed with status code " + QString::number(resp->status));
     return;
   }
 
@@ -117,10 +117,7 @@ void MainWindow::navigate(QString url) {
   m_dom = parse(resp->body);
 
   log("Rendering...");
-  // TODO
-  setUpdatesEnabled(false);
   render(m_dom, nullptr);
-  setUpdatesEnabled(true);
   m_page_layout->update();
 
   auto end_time = duration_cast<std::chrono::milliseconds>(
@@ -132,6 +129,12 @@ void MainWindow::navigate(QString url) {
 
 void MainWindow::render_element(const ElementPtr &el,
                                 const ElementPtr & /*parent*/) {
+  if (el->name() == "br") {
+    auto *label = new QLabel("", this);
+    append_widget(label);
+    return;
+  }
+
   for (const auto &child : el->children()) {
     render(child, el);
   }
@@ -145,7 +148,8 @@ void MainWindow::render_textnode(const TextNodePtr &textnode,
     return;
   }
 
-  auto content = QString::fromStdString(textnode->content()).trimmed();
+  auto content =
+      QString::fromStdString(textnode->content()).trimmed().replace("\n", " ");
   if (content.isEmpty()) {
     return;
   }
@@ -176,12 +180,11 @@ void MainWindow::render_textnode(const TextNodePtr &textnode,
   auto *label = new QLabel(content, this);
   QFont font;
 
-  // TODO
-  if (parent != nullptr && parent->is_heading()) {
+  if (parent != nullptr && (parent->is_heading() || parent->name() == "big")) {
     font.setBold(true);
     label->setContentsMargins(0, 11, 0, 11);
 
-    if (parent->name() == "h1") {
+    if (parent->name() == "h1" || parent->name() == "big") {
       font.setPixelSize(32);
     } else if (parent->name() == "h2") {
       font.setPixelSize(24);

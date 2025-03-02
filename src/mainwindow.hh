@@ -10,6 +10,8 @@ class MainWindow : public QMainWindow {
 public:
   explicit MainWindow(QWidget *parent = nullptr);
 
+  void navigate(QString url);
+
 private:
   // TODO
   static constexpr const char *s_user_agent =
@@ -22,8 +24,6 @@ private:
   QLineEdit *m_url_bar;
   QVBoxLayout *m_page_layout;
   QList<QWidget *> m_page_widgets;
-
-  void navigate(QString url);
 
   void render(const NodePtr &node, const ElementPtr &parent) {
     if (node->is_element()) {
