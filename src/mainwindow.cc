@@ -1,11 +1,12 @@
 #include "mainwindow.hh"
+#include "src/dominspector.hh"
 #include <QLabel>
+#include <QMenuBar>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QStyle>
 #include <QUrl>
-#include <utility>
 
 class Anchor : public QLabel {
 public:
@@ -16,8 +17,9 @@ protected:
   void mousePressEvent(QMouseEvent *event) override {
     if (event->button() == Qt::LeftButton) {
       dynamic_cast<MainWindow *>(m_parent)->navigate(m_href);
+    } else {
+      QLabel::mousePressEvent(event);
     }
-    QLabel::mousePressEvent(event);
   }
 
 private:
@@ -27,6 +29,17 @@ private:
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   setWindowTitle("Osmium");
+
+  auto *file_menu = menuBar()->addMenu("File");
+  auto *inspector_action = new QAction("DOM Inspector", this);
+  connect(inspector_action, &QAction::triggered, this,
+          [this]() { DOMInspector::open(m_dom); });
+  file_menu->addAction(inspector_action);
+  file_menu->addSeparator();
+  auto *quit_action = new QAction("Quit", this);
+  connect(quit_action, &QAction::triggered, this,
+          []() { QApplication::exit(); });
+  file_menu->addAction(quit_action);
 
   auto *central_widget = new QWidget(this);
   setCentralWidget(central_widget);
@@ -171,8 +184,8 @@ void MainWindow::render_element(const ElementPtr &el,
 void MainWindow::render_textnode(const TextNodePtr &textnode,
                                  const ElementPtr &parent) {
   if (parent != nullptr &&
-      (parent->name() == "script" || parent->name() == "style" ||
-       parent->name() == "head")) {
+      std::count(s_hidden_elements.begin(), s_hidden_elements.end(),
+                 parent->name()) > 0) {
     return;
   }
 
@@ -223,4 +236,11 @@ void MainWindow::render_textnode(const TextNodePtr &textnode,
 
   label->setFont(font);
   append_widget(label);
+}
+
+void MainWindow::keyPressEvent(QKeyEvent *event) {
+  if (event->key() == Qt::Key_F12) {
+    DOMInspector::open(m_dom);
+  }
+  QMainWindow::keyPressEvent(event);
 }

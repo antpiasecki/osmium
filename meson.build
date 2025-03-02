@@ -15,6 +15,7 @@ executable(
   'osmium',
   'src/main.cc',
   'src/mainwindow.cc',
+  'src/dominspector.cc',
   install: true,
   dependencies: [qt_dep, httplib_dep, libosmium_html_dep],
   cpp_args: ['-Wall', '-Wextra', '-Wpedantic'],
