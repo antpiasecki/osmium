@@ -10,6 +10,6 @@ ninja -C build -j $(nproc)
 ```
 
 ## Dependencies
-* Qt6
+* Qt
 * [osmium-html](https://github.com/antpiasecki/osmium-html)
 * cpp-httplib

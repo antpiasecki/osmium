@@ -1,8 +1,29 @@
 #include "mainwindow.hh"
 #include <QLabel>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QStyle>
+#include <QUrl>
+#include <utility>
+
+class Anchor : public QLabel {
+public:
+  Anchor(const QString &text, QString href, QWidget *parent = nullptr)
+      : QLabel(text, parent), m_href(std::move(href)), m_parent(parent) {}
+
+protected:
+  void mousePressEvent(QMouseEvent *event) override {
+    if (event->button() == Qt::LeftButton) {
+      dynamic_cast<MainWindow *>(m_parent)->navigate(m_href);
+    }
+    QLabel::mousePressEvent(event);
+  }
+
+private:
+  QString m_href;
+  QWidget *m_parent = nullptr;
+};
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   setWindowTitle("Osmium");
@@ -22,12 +43,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   navbar_layout->addWidget(m_url_bar);
 
   auto *go_button = new QPushButton("→", this);
-  go_button->setMaximumWidth(25);
+  go_button->setMaximumWidth(50);
   connect(go_button, &QPushButton::clicked, this,
           [this]() { this->navigate(m_url_bar->text()); });
   navbar_layout->addWidget(go_button);
 
   auto *page_scroll_area = new QScrollArea(this);
+  page_scroll_area->setFrameShape(QFrame::NoFrame);
   auto *page_widget = new QWidget(this);
   m_page_layout = new QVBoxLayout(this);
   m_page_layout->setAlignment(Qt::AlignTop);
@@ -42,7 +64,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
 // TODO: the arg probably shouldnt be named url
 void MainWindow::navigate(QString url) {
-  auto start_time = duration_cast<std::chrono::milliseconds>(
+  auto start_time = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::system_clock::now().time_since_epoch());
 
   // handle absolute paths (/home, /static/style.css)
@@ -69,6 +91,7 @@ void MainWindow::navigate(QString url) {
   m_url_bar->setText(m_current_url);
 
   // clear the previous page
+  // TODO: sometimes very slow?
   clear_page();
   m_page_layout->update();
   QCoreApplication::processEvents();
@@ -86,8 +109,13 @@ void MainWindow::navigate(QString url) {
   }
 
   if (parsed_url.scheme() == "https") {
+#if CPPHTTPLIB_OPENSSL_SUPPORT
     httplib::SSLClient client(host);
     resp = client.Get(path, headers);
+#else
+    log("Osmium was built without SSL support");
+    return;
+#endif
   } else if (parsed_url.scheme() == "http") {
     httplib::Client client(host);
     resp = client.Get(path, headers);
@@ -120,7 +148,7 @@ void MainWindow::navigate(QString url) {
   render(m_dom, nullptr);
   m_page_layout->update();
 
-  auto end_time = duration_cast<std::chrono::milliseconds>(
+  auto end_time = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::system_clock::now().time_since_epoch());
 
   log("Rendered " + QString::number(m_page_widgets.size()) + " widgets.");
@@ -161,19 +189,10 @@ void MainWindow::render_textnode(const TextNodePtr &textnode,
   }
 
   if (parent != nullptr && parent->name() == "a") {
-    // TODO
-    // auto *label = new GGtk::make_managed<Gtk::LinkButton>();
-    // label->set_label(content);
-
-    // auto href = parent->attributes()["href"];
-    // label->signal_activate_link().connect(
-    //     [this, href]() {
-    //       navigate(href);
-    //       return true;
-    //     },
-    //     false);
-
-    // append_widget(label);
+    auto *label = new Anchor(
+        content, QString::fromStdString(parent->attributes()["href"]), this);
+    label->setStyleSheet("QLabel { color: #155ca2; }");
+    append_widget(label);
     return;
   }
 
