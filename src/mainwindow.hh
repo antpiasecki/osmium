@@ -1,16 +1,21 @@
 #pragma once
-#include <QApplication>
 #include <QLineEdit>
 #include <QMainWindow>
 #include <QVBoxLayout>
 #include <httplib.h>
+#include <optional>
 #include <osmium-html/parser.hh>
 
 class MainWindow : public QMainWindow {
 public:
   explicit MainWindow(QWidget *parent = nullptr);
 
-  void navigate(QString url);
+  void navigate(const QString &url);
+
+  // TODO: need to find better place for this
+  static void log(const QString &s) {
+    std::cout << s.toStdString() << std::endl;
+  }
 
 protected:
   void keyPressEvent(QKeyEvent *event) override;
@@ -32,6 +37,8 @@ private:
   QVBoxLayout *m_page_layout;
   QList<QWidget *> m_page_widgets;
 
+  std::optional<QUrl> resolve_url(const QString &url);
+
   void render(const NodePtr &node, const ElementPtr &parent) {
     if (node->is_element()) {
       render_element(std::static_pointer_cast<Element>(node), parent);
@@ -52,9 +59,5 @@ private:
   void clear_page() {
     qDeleteAll(m_page_widgets);
     m_page_widgets.clear();
-  }
-
-  static void log(const QString &s) {
-    std::cout << s.toStdString() << std::endl;
   }
 };

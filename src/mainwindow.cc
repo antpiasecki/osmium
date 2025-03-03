@@ -1,30 +1,54 @@
 #include "mainwindow.hh"
 #include "src/dominspector.hh"
+#include <QApplication>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMouseEvent>
+#include <QNetworkReply>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QStyle>
-#include <QUrl>
 
 class Anchor : public QLabel {
 public:
-  Anchor(const QString &text, QString href, QWidget *parent = nullptr)
-      : QLabel(text, parent), m_href(std::move(href)), m_parent(parent) {}
+  Anchor(const QString &text, QUrl url, QWidget *parent = nullptr)
+      : QLabel(text, parent), m_url(std::move(url)), m_parent(parent) {}
 
 protected:
   void mousePressEvent(QMouseEvent *event) override {
     if (event->button() == Qt::LeftButton) {
-      dynamic_cast<MainWindow *>(m_parent)->navigate(m_href);
+      dynamic_cast<MainWindow *>(m_parent)->navigate(m_url.toString());
     } else {
       QLabel::mousePressEvent(event);
     }
   }
 
 private:
-  QString m_href;
+  QUrl m_url;
   QWidget *m_parent = nullptr;
+};
+
+class Image : public QLabel {
+public:
+  explicit Image(const QUrl &url, QWidget *parent = nullptr) : QLabel(parent) {
+    // TODO: use our HTTP library for this
+    auto *manager = new QNetworkAccessManager(this);
+    connect(manager, &QNetworkAccessManager::finished, this,
+            [this, url](QNetworkReply *reply) {
+              if (reply->error() == QNetworkReply::NoError) {
+                QPixmap pixmap;
+                pixmap.loadFromData(reply->readAll());
+                setPixmap(pixmap);
+              } else {
+                MainWindow::log("Failed to display " + url.toString());
+              }
+              reply->deleteLater();
+            });
+
+    QNetworkRequest request(url);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
+    manager->get(request);
+  }
 };
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
@@ -76,29 +100,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 }
 
 // TODO: the arg probably shouldnt be named url
-void MainWindow::navigate(QString url) {
+void MainWindow::navigate(const QString &url) {
   auto start_time = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::system_clock::now().time_since_epoch());
 
-  // handle absolute paths (/home, /static/style.css)
-  if (url.startsWith('/')) {
-    QUrl parsed_current_url(m_current_url);
-    if (!parsed_current_url.isValid()) {
-      log("Failed to parse URL: " + url);
-      return;
-    }
-
-    parsed_current_url.setPath(url);
-
-    url = parsed_current_url.toString();
-  }
-  // TODO: handle relative paths
-
-  QUrl parsed_url(url);
-  if (!parsed_url.isValid()) {
+  auto res = resolve_url(url);
+  if (!res.has_value()) {
     log("Failed to parse URL: " + url);
     return;
   }
+  auto parsed_url = res.value();
 
   m_current_url = url;
   m_url_bar->setText(m_current_url);
@@ -168,16 +179,54 @@ void MainWindow::navigate(QString url) {
   log("Done in " + QString::number((end_time - start_time).count()) + " ms.");
 }
 
+std::optional<QUrl> MainWindow::resolve_url(const QString &url) {
+  // handle absolute paths (/home, /static/style.css)
+  if (url.startsWith('/')) {
+    QUrl parsed_current_url(m_current_url);
+    if (!parsed_current_url.isValid()) {
+      return std::nullopt;
+    }
+
+    parsed_current_url.setPath(url);
+    return parsed_current_url;
+  }
+
+  // TODO: handle relative paths
+
+  // TODO: hack
+  if (url.toLower().endsWith(".jpg") || url.toLower().endsWith(".gif")) {
+    QUrl parsed_current_url(m_current_url);
+    if (!parsed_current_url.isValid()) {
+      return std::nullopt;
+    }
+
+    parsed_current_url.setPath("/" + url);
+    return parsed_current_url;
+  }
+
+  QUrl parsed_url(url);
+  if (!parsed_url.isValid()) {
+    return std::nullopt;
+  }
+
+  return url;
+}
+
 void MainWindow::render_element(const ElementPtr &el,
                                 const ElementPtr & /*parent*/) {
   if (el->name() == "br") {
     auto *label = new QLabel("", this);
     append_widget(label);
-    return;
-  }
-
-  for (const auto &child : el->children()) {
-    render(child, el);
+  } else if (el->name() == "img") {
+    // TODO: handle error
+    auto *image = new Image(
+        resolve_url(QString::fromStdString(el->attributes()["src"])).value(),
+        this);
+    append_widget(image);
+  } else {
+    for (const auto &child : el->children()) {
+      render(child, el);
+    }
   }
 }
 
@@ -202,8 +251,12 @@ void MainWindow::render_textnode(const TextNodePtr &textnode,
   }
 
   if (parent != nullptr && parent->name() == "a") {
+    // TODO: handle error
     auto *label = new Anchor(
-        content, QString::fromStdString(parent->attributes()["href"]), this);
+        content,
+        resolve_url(QString::fromStdString(parent->attributes()["href"]))
+            .value(),
+        this);
     label->setStyleSheet("QLabel { color: #155ca2; }");
     append_widget(label);
     return;

@@ -7,7 +7,7 @@ project(
 
 cmake = import('cmake')
 
-qt_dep = dependency('qt5', modules: ['Core', 'Gui', 'Widgets'])
+qt_dep = dependency('qt5', modules: ['Core', 'Gui', 'Widgets', 'Network'])
 httplib_dep = subproject('httplib').get_variable('cpp_httplib_dep')
 libosmium_html_dep = subproject('osmium-html').get_variable('libosmium_html_dep')
 
