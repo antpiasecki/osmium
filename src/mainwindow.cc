@@ -7,6 +7,7 @@
 #include <QNetworkReply>
 #include <QPushButton>
 #include <QScrollArea>
+#include <httplib.h>
 
 class Anchor : public QLabel {
 public:
@@ -51,19 +52,33 @@ public:
   }
 };
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
+MainWindow::MainWindow(QWidget *parent)
+    : QMainWindow(parent), m_page_layout(new QVBoxLayout(this)) {
   setWindowTitle("Osmium");
 
-  auto *file_menu = menuBar()->addMenu("File");
-  auto *inspector_action = new QAction("DOM Inspector", this);
-  connect(inspector_action, &QAction::triggered, this,
-          [this]() { DOMInspector::open(m_dom); });
-  file_menu->addAction(inspector_action);
-  file_menu->addSeparator();
-  auto *quit_action = new QAction("Quit", this);
-  connect(quit_action, &QAction::triggered, this,
-          []() { QApplication::exit(); });
-  file_menu->addAction(quit_action);
+  {
+    auto *osmium_menu = menuBar()->addMenu("Osmium");
+
+    auto *inspector_action = new QAction("DOM Inspector", this);
+    connect(inspector_action, &QAction::triggered, this,
+            [this]() { DOMInspector::open(m_dom); });
+    osmium_menu->addAction(inspector_action);
+    osmium_menu->addSeparator();
+
+    auto *verify_action = new QAction("Verify sites", this);
+    verify_action->setCheckable(true);
+    verify_action->setChecked(true);
+    connect(verify_action, &QAction::toggled, this, [this, verify_action]() {
+      m_do_verification = verify_action->isChecked();
+    });
+    osmium_menu->addAction(verify_action);
+    osmium_menu->addSeparator();
+
+    auto *quit_action = new QAction("Quit", this);
+    connect(quit_action, &QAction::triggered, this,
+            []() { QApplication::exit(); });
+    osmium_menu->addAction(quit_action);
+  }
 
   auto *central_widget = new QWidget(this);
   setCentralWidget(central_widget);
@@ -71,24 +86,25 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   auto *main_layout = new QVBoxLayout(this);
   central_widget->setLayout(main_layout);
 
-  auto *navbar_layout = new QHBoxLayout(this);
-  main_layout->addLayout(navbar_layout);
+  {
+    auto *navbar_layout = new QHBoxLayout(this);
+    main_layout->addLayout(navbar_layout);
 
-  m_url_bar = new QLineEdit(this);
-  connect(m_url_bar, &QLineEdit::returnPressed, this,
-          [this]() { this->navigate(m_url_bar->text()); });
-  navbar_layout->addWidget(m_url_bar);
+    m_url_bar = new QLineEdit(this);
+    connect(m_url_bar, &QLineEdit::returnPressed, this,
+            [this]() { this->navigate(m_url_bar->text()); });
+    navbar_layout->addWidget(m_url_bar);
 
-  auto *go_button = new QPushButton("→", this);
-  go_button->setMaximumWidth(50);
-  connect(go_button, &QPushButton::clicked, this,
-          [this]() { this->navigate(m_url_bar->text()); });
-  navbar_layout->addWidget(go_button);
+    auto *go_button = new QPushButton("→", this);
+    go_button->setMaximumWidth(50);
+    connect(go_button, &QPushButton::clicked, this,
+            [this]() { this->navigate(m_url_bar->text()); });
+    navbar_layout->addWidget(go_button);
+  }
 
   auto *page_scroll_area = new QScrollArea(this);
   page_scroll_area->setFrameShape(QFrame::NoFrame);
   auto *page_widget = new QWidget(this);
-  m_page_layout = new QVBoxLayout(this);
   m_page_layout->setAlignment(Qt::AlignTop);
   page_widget->setLayout(m_page_layout);
   page_scroll_area->setWidget(page_widget);
@@ -104,12 +120,11 @@ void MainWindow::navigate(const QString &url) {
   auto start_time = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::system_clock::now().time_since_epoch());
 
-  auto res = resolve_url(url);
-  if (!res.has_value()) {
+  auto parsed_url = resolve_url(url);
+  if (parsed_url.isEmpty()) {
     log("Failed to parse URL: " + url);
     return;
   }
-  auto parsed_url = res.value();
 
   m_current_url = url;
   m_url_bar->setText(m_current_url);
@@ -135,6 +150,8 @@ void MainWindow::navigate(const QString &url) {
   if (parsed_url.scheme() == "https") {
 #if CPPHTTPLIB_OPENSSL_SUPPORT
     httplib::SSLClient client(host);
+    client.enable_server_hostname_verification(m_do_verification);
+    client.enable_server_certificate_verification(m_do_verification);
     resp = client.Get(path, headers);
 #else
     log("Osmium was built without SSL support");
@@ -142,6 +159,8 @@ void MainWindow::navigate(const QString &url) {
 #endif
   } else if (parsed_url.scheme() == "http") {
     httplib::Client client(host);
+    client.enable_server_hostname_verification(m_do_verification);
+    client.enable_server_certificate_verification(m_do_verification);
     resp = client.Get(path, headers);
   } else {
     log("Unsupported schema: " + parsed_url.scheme());
@@ -179,25 +198,22 @@ void MainWindow::navigate(const QString &url) {
   log("Done in " + QString::number((end_time - start_time).count()) + " ms.");
 }
 
-std::optional<QUrl> MainWindow::resolve_url(const QString &url) {
+QUrl MainWindow::resolve_url(const QString &url) {
   // handle absolute paths (/home, /static/style.css)
   if (url.startsWith('/')) {
     QUrl parsed_current_url(m_current_url);
     if (!parsed_current_url.isValid()) {
-      return std::nullopt;
+      return QUrl{};
     }
 
     parsed_current_url.setPath(url);
     return parsed_current_url;
   }
 
-  // TODO: handle relative paths
-
-  // TODO: hack
-  if (url.toLower().endsWith(".jpg") || url.toLower().endsWith(".gif")) {
+  if (!url.contains("://")) {
     QUrl parsed_current_url(m_current_url);
     if (!parsed_current_url.isValid()) {
-      return std::nullopt;
+      return QUrl{};
     }
 
     parsed_current_url.setPath("/" + url);
@@ -206,7 +222,7 @@ std::optional<QUrl> MainWindow::resolve_url(const QString &url) {
 
   QUrl parsed_url(url);
   if (!parsed_url.isValid()) {
-    return std::nullopt;
+    return QUrl{};
   }
 
   return url;
@@ -218,10 +234,8 @@ void MainWindow::render_element(const ElementPtr &el,
     auto *label = new QLabel("", this);
     append_widget(label);
   } else if (el->name() == "img") {
-    // TODO: handle error
     auto *image = new Image(
-        resolve_url(QString::fromStdString(el->attributes()["src"])).value(),
-        this);
+        resolve_url(QString::fromStdString(el->attributes()["src"])), this);
     append_widget(image);
   } else {
     for (const auto &child : el->children()) {
@@ -251,11 +265,9 @@ void MainWindow::render_textnode(const TextNodePtr &textnode,
   }
 
   if (parent != nullptr && parent->name() == "a") {
-    // TODO: handle error
     auto *label = new Anchor(
         content,
-        resolve_url(QString::fromStdString(parent->attributes()["href"]))
-            .value(),
+        resolve_url(QString::fromStdString(parent->attributes()["href"])),
         this);
     label->setStyleSheet("QLabel { color: #155ca2; }");
     append_widget(label);
