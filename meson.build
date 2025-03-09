@@ -5,7 +5,7 @@ project(
   default_options: ['warning_level=3', 'cpp_std=c++17'],
 )
 
-qt_dep = dependency('qt5', modules: ['Core', 'Gui', 'Widgets', 'Network'])
+qt_dep = dependency('qt5', modules: ['Core', 'Gui', 'Widgets'])
 httplib_dep = subproject('httplib').get_variable('cpp_httplib_dep')
 libosmium_html_dep = subproject('osmium-html').get_variable('libosmium_html_dep')
 
@@ -13,6 +13,7 @@ executable(
   'osmium',
   'src/main.cc',
   'src/mainwindow.cc',
+  'src/net.cc',
   'src/dominspector.cc',
   install: true,
   dependencies: [qt_dep, httplib_dep, libosmium_html_dep],

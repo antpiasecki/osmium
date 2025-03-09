@@ -1,13 +1,12 @@
 #include "mainwindow.hh"
 #include "src/dominspector.hh"
+#include "src/net.hh"
 #include <QApplication>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMouseEvent>
-#include <QNetworkReply>
 #include <QPushButton>
 #include <QScrollArea>
-#include <httplib.h>
 
 class Anchor : public QLabel {
 public:
@@ -31,24 +30,17 @@ private:
 class Image : public QLabel {
 public:
   explicit Image(const QUrl &url, QWidget *parent = nullptr) : QLabel(parent) {
-    // TODO: use our HTTP library for this
-    auto *manager = new QNetworkAccessManager(this);
-    connect(manager, &QNetworkAccessManager::finished, this,
-            [this, url](QNetworkReply *reply) {
-              if (reply->error() == QNetworkReply::NoError) {
-                QPixmap pixmap;
-                pixmap.loadFromData(reply->readAll());
-                setPixmap(pixmap);
-              } else {
-                MainWindow::log("Failed to display " + url.toString());
-              }
-              reply->deleteLater();
-            });
+    // TODO: pass m_do_verification
+    auto resp = Net::get(url, false);
+    if (!resp.ok) {
+      // TODO: log errors
+      return;
+    }
 
-    QNetworkRequest request(url);
-    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                         QNetworkRequest::NoLessSafeRedirectPolicy);
-    manager->get(request);
+    QPixmap pixmap;
+    pixmap.loadFromData(QByteArray::fromRawData(
+        resp.result->body.data(), static_cast<int>(resp.result->body.size())));
+    setPixmap(pixmap);
   }
 };
 
@@ -120,7 +112,7 @@ void MainWindow::navigate(const QString &url) {
   auto start_time = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::system_clock::now().time_since_epoch());
 
-  auto parsed_url = resolve_url(url);
+  auto parsed_url = Net::resolve_url(url, m_current_url);
   if (parsed_url.isEmpty()) {
     log("Failed to parse URL: " + url);
     return;
@@ -137,55 +129,17 @@ void MainWindow::navigate(const QString &url) {
 
   log("Navigating to " + url + "...");
 
-  // TODO: dont use httplib
-  httplib::Result resp;
-  httplib::Headers headers = {{"User-Agent", std::string(s_user_agent)}};
-
-  auto host = parsed_url.host().toStdString();
-  auto path = parsed_url.path().toStdString();
-  if (path.empty()) {
-    path = "/";
-  }
-
-  if (parsed_url.scheme() == "https") {
-#if CPPHTTPLIB_OPENSSL_SUPPORT
-    httplib::SSLClient client(host);
-    client.enable_server_hostname_verification(m_do_verification);
-    client.enable_server_certificate_verification(m_do_verification);
-    resp = client.Get(path, headers);
-#else
-    log("Osmium was built without SSL support");
-    return;
-#endif
-  } else if (parsed_url.scheme() == "http") {
-    httplib::Client client(host);
-    client.enable_server_hostname_verification(m_do_verification);
-    client.enable_server_certificate_verification(m_do_verification);
-    resp = client.Get(path, headers);
-  } else {
-    log("Unsupported schema: " + parsed_url.scheme());
+  auto resp = Net::get(url, m_do_verification);
+  if (!resp.ok) {
+    log(resp.error);
     return;
   }
+  m_current_url = resp.url.toString();
+  m_url_bar->setText(m_current_url);
 
-  if (!resp) {
-    log("Request failed with error: " +
-        QString::fromStdString(httplib::to_string(resp.error())));
-    return;
-  }
-
-  if (resp->status == 301 || resp->status == 302 || resp->status == 307 ||
-      resp->status == 308) {
-    navigate(QString::fromStdString(resp->get_header_value("Location")));
-    return;
-  }
-
-  if (resp->status != 200) {
-    log("Request failed with status code " + QString::number(resp->status));
-    return;
-  }
-
-  log("Parsing " + QString::number(resp->body.length() / 1024) + " KBs...");
-  m_dom = parse(resp->body);
+  log("Parsing " + QString::number(resp.result->body.length() / 1024) +
+      " KBs...");
+  m_dom = parse(resp.result->body);
 
   log("Rendering...");
   render(m_dom, nullptr);
@@ -198,36 +152,6 @@ void MainWindow::navigate(const QString &url) {
   log("Done in " + QString::number((end_time - start_time).count()) + " ms.");
 }
 
-QUrl MainWindow::resolve_url(const QString &url) {
-  // handle absolute paths (/home, /static/style.css)
-  if (url.startsWith('/')) {
-    QUrl parsed_current_url(m_current_url);
-    if (!parsed_current_url.isValid()) {
-      return QUrl{};
-    }
-
-    parsed_current_url.setPath(url);
-    return parsed_current_url;
-  }
-
-  if (!url.contains("://")) {
-    QUrl parsed_current_url(m_current_url);
-    if (!parsed_current_url.isValid()) {
-      return QUrl{};
-    }
-
-    parsed_current_url.setPath("/" + url);
-    return parsed_current_url;
-  }
-
-  QUrl parsed_url(url);
-  if (!parsed_url.isValid()) {
-    return QUrl{};
-  }
-
-  return url;
-}
-
 void MainWindow::render_element(const ElementPtr &el,
                                 const ElementPtr & /*parent*/) {
   if (el->name() == "br") {
@@ -235,7 +159,9 @@ void MainWindow::render_element(const ElementPtr &el,
     append_widget(label);
   } else if (el->name() == "img") {
     auto *image = new Image(
-        resolve_url(QString::fromStdString(el->attributes()["src"])), this);
+        Net::resolve_url(QString::fromStdString(el->attributes()["src"]),
+                         m_current_url),
+        this);
     append_widget(image);
   } else {
     for (const auto &child : el->children()) {
@@ -267,7 +193,8 @@ void MainWindow::render_textnode(const TextNodePtr &textnode,
   if (parent != nullptr && parent->name() == "a") {
     auto *label = new Anchor(
         content,
-        resolve_url(QString::fromStdString(parent->attributes()["href"])),
+        Net::resolve_url(QString::fromStdString(parent->attributes()["href"]),
+                         m_current_url),
         this);
     label->setStyleSheet("QLabel { color: #155ca2; }");
     append_widget(label);

@@ -19,10 +19,6 @@ protected:
   void keyPressEvent(QKeyEvent *event) override;
 
 private:
-  // TODO: what if we're not on linux
-  static constexpr const char *s_user_agent =
-      "Mozilla/5.0 (Linux x86_64) osmium-html/0.1 Osmium/0.1";
-
   static constexpr std::array<std::string_view, 9> s_hidden_elements = {
       "script",   "style",  "head", "iframe", "link",
       "template", "option", "meta", "base"};
@@ -36,8 +32,6 @@ private:
   QLineEdit *m_url_bar;
   QVBoxLayout *m_page_layout;
   QList<QWidget *> m_page_widgets;
-
-  QUrl resolve_url(const QString &url);
 
   void render(const NodePtr &node, const ElementPtr &parent) {
     if (node->is_element()) {
