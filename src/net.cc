@@ -55,6 +55,10 @@ Net::Response Net::get(const QUrl &url, bool do_verification) {
 }
 
 QUrl Net::resolve_url(const QString &url, const QString &current_url) {
+  if (url.startsWith("//")) {
+    return "http:" + url;
+  }
+
   if (url.startsWith('/')) {
     QUrl parsed_current_url(current_url);
     if (!parsed_current_url.isValid()) {

@@ -7,6 +7,7 @@
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QtConcurrent/QtConcurrent>
 
 class Anchor : public QLabel {
 public:
@@ -30,18 +31,35 @@ private:
 class Image : public QLabel {
 public:
   explicit Image(const QUrl &url, QWidget *parent = nullptr) : QLabel(parent) {
-    // TODO: pass m_do_verification
-    auto resp = Net::get(url, false);
-    if (!resp.ok) {
-      // TODO: log errors
-      return;
-    }
+    auto future = QtConcurrent::run(
+        [](const QUrl &url) -> QPixmap {
+          // TODO: pass m_do_verification
+          auto resp = Net::get(url, false);
+          if (!resp.ok) {
+            // TODO: log errors
+            return {};
+          }
 
-    QPixmap pixmap;
-    pixmap.loadFromData(QByteArray::fromRawData(
-        resp.result->body.data(), static_cast<int>(resp.result->body.size())));
-    setPixmap(pixmap);
+          QPixmap pixmap;
+          pixmap.loadFromData(QByteArray::fromRawData(
+              resp.result->body.data(),
+              static_cast<int>(resp.result->body.size())));
+          return pixmap;
+        },
+        url);
+
+    watcher.setFuture(future);
+    connect(&watcher, &QFutureWatcher<QPixmap>::finished, this, [this]() {
+      auto pixmap = watcher.result();
+      if (!pixmap.isNull()) {
+        setPixmap(pixmap);
+        show();
+      }
+    });
   }
+
+private:
+  QFutureWatcher<QPixmap> watcher;
 };
 
 MainWindow::MainWindow(QWidget *parent)
