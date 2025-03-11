@@ -101,6 +101,24 @@ MainWindow::MainWindow(QWidget *parent)
     auto *navbar_layout = new QHBoxLayout(this);
     main_layout->addLayout(navbar_layout);
 
+    auto *back_button = new QPushButton("←", this);
+    back_button->setMaximumWidth(50);
+    connect(back_button, &QPushButton::clicked, this, [this]() {
+      if (m_history.size() < 2) {
+        return;
+      }
+
+      m_history.pop();
+      navigate(m_history.pop().toString());
+    });
+    navbar_layout->addWidget(back_button);
+
+    auto *refresh_button = new QPushButton("↺", this);
+    refresh_button->setMaximumWidth(50);
+    connect(refresh_button, &QPushButton::clicked, this,
+            [this]() { navigate(m_current_url); });
+    navbar_layout->addWidget(refresh_button);
+
     m_url_bar = new QLineEdit(this);
     connect(m_url_bar, &QLineEdit::returnPressed, this,
             [this]() { this->navigate(m_url_bar->text()); });
@@ -122,8 +140,6 @@ MainWindow::MainWindow(QWidget *parent)
   page_scroll_area->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   page_scroll_area->setWidgetResizable(true);
   main_layout->addWidget(page_scroll_area);
-
-  navigate("http://example.org");
 }
 
 void MainWindow::navigate(const QString &url) {
@@ -138,6 +154,7 @@ void MainWindow::navigate(const QString &url) {
 
   m_current_url = url;
   m_url_bar->setText(m_current_url);
+  m_history.push(m_current_url);
 
   // clear the previous page
   clear_page();

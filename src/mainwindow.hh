@@ -1,6 +1,8 @@
 #pragma once
 #include <QLineEdit>
 #include <QMainWindow>
+#include <QStack>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <osmium-html/parser.hh>
 
@@ -21,6 +23,7 @@ private:
   NodePtr m_dom;
   QString m_current_url;
   QString m_page_title;
+  QStack<QUrl> m_history;
 
   QLineEdit *m_url_bar;
   QVBoxLayout *m_page_layout;

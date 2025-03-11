@@ -9,6 +9,8 @@ int main(int argc, char *argv[]) {
 
   if (argc > 1) {
     window.navigate(argv[1]);
+  } else {
+    window.navigate("http://example.org");
   }
 
   return QApplication::exec();
