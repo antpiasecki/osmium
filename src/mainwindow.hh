@@ -10,11 +10,6 @@ public:
 
   void navigate(const QString &url);
 
-  // TODO: need to find better place for this
-  static void log(const QString &s) {
-    std::cout << s.toStdString() << std::endl;
-  }
-
 protected:
   void keyPressEvent(QKeyEvent *event) override;
 
@@ -22,8 +17,6 @@ private:
   static constexpr std::array<std::string_view, 9> s_hidden_elements = {
       "script",   "style",  "head", "iframe", "link",
       "template", "option", "meta", "base"};
-
-  bool m_do_verification = true;
 
   NodePtr m_dom;
   QString m_current_url;

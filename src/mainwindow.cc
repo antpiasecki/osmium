@@ -9,6 +9,8 @@
 #include <QScrollArea>
 #include <QtConcurrent/QtConcurrent>
 
+static void log(const QString &s) { std::cout << s.toStdString() << std::endl; }
+
 class Anchor : public QLabel {
 public:
   Anchor(const QString &text, QUrl url, QWidget *parent = nullptr)
@@ -33,10 +35,9 @@ public:
   explicit Image(const QUrl &url, QWidget *parent = nullptr) : QLabel(parent) {
     auto future = QtConcurrent::run(
         [](const QUrl &url) -> QPixmap {
-          // TODO: pass m_do_verification
-          auto resp = Net::get(url, false);
-          if (!resp.ok) {
-            // TODO: log errors
+          auto resp = Net::get(url);
+          if (!resp.error.isEmpty()) {
+            log(resp.error);
             return {};
           }
 
@@ -78,8 +79,8 @@ MainWindow::MainWindow(QWidget *parent)
     auto *verify_action = new QAction("Verify sites", this);
     verify_action->setCheckable(true);
     verify_action->setChecked(true);
-    connect(verify_action, &QAction::toggled, this, [this, verify_action]() {
-      m_do_verification = verify_action->isChecked();
+    connect(verify_action, &QAction::toggled, this, [verify_action]() {
+      Net::s_do_verification = verify_action->isChecked();
     });
     osmium_menu->addAction(verify_action);
     osmium_menu->addSeparator();
@@ -125,7 +126,6 @@ MainWindow::MainWindow(QWidget *parent)
   navigate("http://example.org");
 }
 
-// TODO: the arg probably shouldnt be named url
 void MainWindow::navigate(const QString &url) {
   auto start_time = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::system_clock::now().time_since_epoch());
@@ -140,15 +140,14 @@ void MainWindow::navigate(const QString &url) {
   m_url_bar->setText(m_current_url);
 
   // clear the previous page
-  // TODO: sometimes very slow?
   clear_page();
   m_page_layout->update();
   QCoreApplication::processEvents();
 
   log("Navigating to " + url + "...");
 
-  auto resp = Net::get(url, m_do_verification);
-  if (!resp.ok) {
+  auto resp = Net::get(url);
+  if (!resp.error.isEmpty()) {
     log(resp.error);
     return;
   }
@@ -214,6 +213,7 @@ void MainWindow::render_textnode(const TextNodePtr &textnode,
         Net::resolve_url(QString::fromStdString(parent->attributes()["href"]),
                          m_current_url),
         this);
+    label->setWordWrap(true);
     label->setStyleSheet("QLabel { color: #155ca2; }");
     append_widget(label);
     return;
@@ -244,6 +244,7 @@ void MainWindow::render_textnode(const TextNodePtr &textnode,
     label->setContentsMargins(0, 16, 0, 16);
   }
 
+  label->setWordWrap(true);
   label->setFont(font);
   append_widget(label);
 }

@@ -1,6 +1,8 @@
 #include "net.hh"
 
-Net::Response Net::get(const QUrl &url, bool do_verification) {
+bool Net::s_do_verification = true; // NOLINT
+
+Net::Response Net::get(const QUrl &url) {
   httplib::Result resp;
   httplib::Headers headers = {{"User-Agent", std::string(s_user_agent)}};
 
@@ -13,8 +15,8 @@ Net::Response Net::get(const QUrl &url, bool do_verification) {
   if (url.scheme() == "https") {
 #if CPPHTTPLIB_OPENSSL_SUPPORT
     httplib::SSLClient client(host);
-    client.enable_server_hostname_verification(do_verification);
-    client.enable_server_certificate_verification(do_verification);
+    client.enable_server_hostname_verification(s_do_verification);
+    client.enable_server_certificate_verification(s_do_verification);
     resp = client.Get(path, headers);
 #else
     return Response{false, "Osmium was built without SSL support", url,
@@ -22,36 +24,35 @@ Net::Response Net::get(const QUrl &url, bool do_verification) {
 #endif
   } else if (url.scheme() == "http") {
     httplib::Client client(host);
-    client.enable_server_hostname_verification(do_verification);
-    client.enable_server_certificate_verification(do_verification);
+    client.enable_server_hostname_verification(s_do_verification);
+    client.enable_server_certificate_verification(s_do_verification);
     resp = client.Get(path, headers);
   } else {
-    return Response{false, "Unsupported schema: " + url.scheme(), url,
+    return Response{"Unsupported schema: " + url.scheme(), url,
                     std::move(resp)};
   }
 
   if (!resp) {
     return Response{
-        false,
         "Request failed with error: " +
             QString::fromStdString(httplib::to_string(resp.error())),
         url, std::move(resp)};
   }
 
-  if (resp->status == 301 || resp->status == 302 || resp->status == 307 ||
-      resp->status == 308) {
-    return Net::get(QString::fromStdString(resp->get_header_value("Location")),
-                    do_verification);
+  if (resp->status == httplib::MovedPermanently_301 ||
+      resp->status == httplib::Found_302 ||
+      resp->status == httplib::TemporaryRedirect_307 ||
+      resp->status == httplib::PermanentRedirect_308) {
+    return Net::get(QString::fromStdString(resp->get_header_value("Location")));
   }
 
-  if (resp->status != 200) {
-    return Response{false,
-                    "Request failed with status code " +
+  if (resp->status != httplib::OK_200) {
+    return Response{"Request failed with status code " +
                         QString::number(resp->status),
                     url, std::move(resp)};
   }
 
-  return Response{true, "", url, std::move(resp)};
+  return Response{"", url, std::move(resp)};
 }
 
 QUrl Net::resolve_url(const QString &url, const QString &current_url) {
