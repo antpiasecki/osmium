@@ -13,7 +13,7 @@ executable(
   'osmium',
   'src/main.cc',
   'src/mainwindow.cc',
-  'src/net.cc',
+  'src/http.cc',
   'src/dominspector.cc',
   install: true,
   dependencies: [qt_dep, httplib_dep, libosmium_html_dep],

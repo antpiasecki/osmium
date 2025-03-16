@@ -1,4 +1,4 @@
-#include "net.hh"
+#include "http.hh"
 
 bool Net::s_do_verification = true; // NOLINT
 
@@ -7,6 +7,10 @@ Net::Response Net::get(const QUrl &url) {
   httplib::Headers headers = {{"User-Agent", std::string(s_user_agent)}};
 
   auto host = url.host().toStdString();
+  if (url.port() != -1) {
+    host += ":" + std::to_string(url.port());
+  }
+
   auto path = url.path().toStdString();
   if (path.empty()) {
     path = "/";

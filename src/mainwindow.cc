@@ -1,6 +1,6 @@
 #include "mainwindow.hh"
 #include "src/dominspector.hh"
-#include "src/net.hh"
+#include "src/http.hh"
 #include <QApplication>
 #include <QLabel>
 #include <QMenuBar>
@@ -197,6 +197,24 @@ void MainWindow::render_element(const ElementPtr &el,
                          m_current_url),
         this);
     append_widget(image);
+  } else if (el->name() == "input") {
+    if (el->attributes()["type"] == "text") {
+      auto *input = new QLineEdit(this);
+      input->setText(QString::fromStdString(el->attributes()["value"]));
+      append_widget(input);
+      input->adjustSize();
+      input->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    } else if (el->attributes()["type"] == "submit") {
+      auto *button = new QPushButton(
+          QString::fromStdString(el->attributes()["value"]), this);
+      append_widget(button);
+      button->adjustSize();
+      button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+      return;
+    } else {
+      log("Unimplemented input type: " +
+          QString::fromStdString(el->attributes()["type"]));
+    }
   } else {
     for (const auto &child : el->children()) {
       render(child, el);
@@ -233,6 +251,14 @@ void MainWindow::render_textnode(const TextNodePtr &textnode,
     label->setWordWrap(true);
     label->setStyleSheet("QLabel { color: #155ca2; }");
     append_widget(label);
+    return;
+  }
+
+  if (parent != nullptr && parent->name() == "button") {
+    auto *button = new QPushButton(content, this);
+    append_widget(button);
+    button->adjustSize();
+    button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     return;
   }
 
